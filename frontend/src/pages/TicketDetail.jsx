@@ -141,7 +141,7 @@ export default function TicketDetail() {
           {isManager && (
             <div>
               <div style={{ fontWeight:700, fontSize:13, color:'var(--text)', marginBottom:12 }}>
-                ⚙️ Manage Ticket
+                Manage Ticket
               </div>
               <div style={{ display:'flex', gap:16, flexWrap:'wrap' }}>
                 {/* Status change */}
@@ -208,7 +208,7 @@ export default function TicketDetail() {
       {/* Comments */}
       <div style={{ background:'var(--surface)', border:'1px solid var(--border)', borderRadius:'var(--radius-lg)', overflow:'hidden' }}>
         <div style={{ padding:'18px 24px', borderBottom:'1px solid var(--border)', fontWeight:700, fontSize:14, color:'var(--text)' }}>
-          💬 Notes & Updates ({ticket.comments?.length || 0})
+          Notes &amp; Updates ({ticket.comments?.length || 0})
         </div>
 
         {/* Comment list */}
@@ -293,7 +293,7 @@ export default function TicketDetail() {
 
         {isResolved && (
           <div style={{ padding:'14px 24px', background:'var(--low-bg)', borderTop:'1px solid var(--low-border)', fontSize:13, color:'var(--low)', textAlign:'center', fontWeight:500 }}>
-            ✅ This ticket is resolved. New comments are disabled.
+            This ticket is resolved. New comments are disabled.
           </div>
         )}
       </div>

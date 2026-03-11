@@ -14,67 +14,79 @@ export default function Navbar() {
     <nav style={{
       background: 'var(--surface)',
       borderBottom: '1px solid var(--border)',
-      padding: '0 24px',
-      height: 60,
+      padding: '0 28px',
+      height: 64,
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'space-between',
       position: 'sticky',
       top: 0,
       zIndex: 100,
-      boxShadow: 'var(--shadow-sm)',
+      boxShadow: '0 1px 0 var(--border)',
     }}>
-      {/* Logo */}
+      {/* Logo + Brand */}
       <button
         onClick={() => navigate('/')}
-        style={{ display:'flex', alignItems:'center', gap:10, background:'none', border:'none', padding:0 }}
+        style={{ display: 'flex', alignItems: 'center', gap: 12, background: 'none', border: 'none', padding: 0 }}
       >
-        <span style={{ fontSize: 22 }}>✏️</span>
-        <span style={{ fontWeight: 700, fontSize: 16, color: 'var(--primary)' }}>
-          Little Scribblers
-        </span>
-        <span style={{
-          fontSize: 11, fontWeight: 500, color: 'var(--text-muted)',
-          background: 'var(--primary-light)', borderRadius: 99, padding: '2px 8px',
-        }}>
-          CRM
-        </span>
+        <img
+          src="/LS.png"
+          alt="Little Scribblers"
+          style={{ height: 38, width: 38, objectFit: 'contain', borderRadius: 'var(--radius-sm)' }}
+        />
+        <div>
+          <div style={{ fontWeight: 700, fontSize: 15, color: 'var(--text)', lineHeight: 1.2 }}>
+            Little Scribblers
+          </div>
+          <div style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 500, letterSpacing: '.06em', textTransform: 'uppercase' }}>
+            Centre Management
+          </div>
+        </div>
       </button>
 
       {/* Right side */}
-      <div style={{ display:'flex', alignItems:'center', gap:16 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
         {/* User info */}
-        <div style={{ textAlign:'right' }}>
-          <div style={{ fontWeight: 600, fontSize: 13, color: 'var(--text)' }}>
+        <div style={{ textAlign: 'right' }}>
+          <div style={{ fontWeight: 600, fontSize: 13, color: 'var(--text)', lineHeight: 1.3 }}>
             {user?.full_name}
           </div>
           <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-            {user?.role === 'account_manager' ? 'Account Manager' : user?.branch}
+            {user?.role === 'account_manager' ? 'Account Manager' : user?.branch + ' Branch'}
           </div>
         </div>
 
         {/* Avatar */}
         <div style={{
           width: 36, height: 36, borderRadius: '50%',
-          background: 'var(--primary-light)',
+          background: 'var(--primary)',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
-          fontWeight: 700, fontSize: 14, color: 'var(--primary)',
+          fontWeight: 700, fontSize: 14, color: '#fff',
           flexShrink: 0,
         }}>
           {user?.full_name?.[0]?.toUpperCase()}
         </div>
 
-        {/* Logout */}
+        {/* Divider */}
+        <div style={{ width: 1, height: 28, background: 'var(--border)' }} />
+
+        {/* Sign out */}
         <button
           onClick={handleLogout}
           style={{
-            background: 'none', border: '1px solid var(--border)',
-            borderRadius: 'var(--radius-sm)', padding: '6px 14px',
-            fontSize: 13, color: 'var(--text-muted)',
+            background: 'none', border: '1.5px solid var(--border)',
+            borderRadius: 'var(--radius-md)', padding: '7px 16px',
+            fontSize: 13, fontWeight: 500, color: 'var(--text-muted)',
             transition: 'all .15s',
           }}
-          onMouseEnter={e => { e.target.style.borderColor = 'var(--urgent)'; e.target.style.color = 'var(--urgent)'; }}
-          onMouseLeave={e => { e.target.style.borderColor = 'var(--border)'; e.target.style.color = 'var(--text-muted)'; }}
+          onMouseEnter={e => {
+            e.currentTarget.style.borderColor = 'var(--primary)';
+            e.currentTarget.style.color = 'var(--primary)';
+          }}
+          onMouseLeave={e => {
+            e.currentTarget.style.borderColor = 'var(--border)';
+            e.currentTarget.style.color = 'var(--text-muted)';
+          }}
         >
           Sign out
         </button>
