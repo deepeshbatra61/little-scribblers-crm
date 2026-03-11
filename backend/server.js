@@ -24,19 +24,30 @@ const auth = (req, res, next) => {
   }
 };
 
-// Branch code mapping for ticket numbering
+// ─── Helpers ───────────────────────────────────────────────────────────────
+
 const BRANCH_CODES = {
-  Ashfield:    'ASH',
-  Burwood:     'BUR',
-  Strathfield: 'STR',
-  Newtown:     'NEW',
-  Marrickville:'MAR',
+  Ashfield: 'ASH', Burwood: 'BUR', Strathfield: 'STR',
+  Newtown: 'NEW', Marrickville: 'MAR',
 };
 
-// Priority sort order
 const PRIORITY_ORDER = "CASE priority WHEN 'urgent' THEN 1 WHEN 'high' THEN 2 WHEN 'medium' THEN 3 WHEN 'low' THEN 4 END";
 
 const parseTicket = t => ({ ...t, metadata: JSON.parse(t.metadata || '{}') });
+
+const notify = (userId, title, body, ticketId = null) => {
+  try {
+    db.prepare(
+      'INSERT INTO notifications (id, user_id, title, body, ticket_id) VALUES (?, ?, ?, ?, ?)'
+    ).run(uuidv4(), userId, title, body || null, ticketId);
+  } catch (e) {
+    console.error('Notification error:', e.message);
+  }
+};
+
+// Get all account_manager user IDs (for notifying Shady on new tickets)
+const getManagerIds = () =>
+  db.prepare("SELECT id FROM users WHERE role = 'account_manager'").all().map(u => u.id);
 
 // ─── Auth Routes ───────────────────────────────────────────────────────────
 
@@ -49,17 +60,12 @@ app.post('/api/auth/login', (req, res) => {
   if (!user || !bcrypt.compareSync(password, user.password_hash))
     return res.status(401).json({ error: 'Invalid username or password' });
 
-  const payload = {
-    id: user.id, username: user.username,
-    full_name: user.full_name, role: user.role, branch: user.branch,
-  };
+  const payload = { id: user.id, username: user.username, full_name: user.full_name, role: user.role, branch: user.branch };
   const token = jwt.sign(payload, JWT_SECRET, { expiresIn: '7d' });
   res.json({ token, user: payload });
 });
 
-app.get('/api/auth/me', auth, (req, res) => {
-  res.json({ user: req.user });
-});
+app.get('/api/auth/me', auth, (req, res) => res.json({ user: req.user }));
 
 app.post('/api/auth/change-password', auth, (req, res) => {
   const { current_password, new_password } = req.body;
@@ -68,21 +74,16 @@ app.post('/api/auth/change-password', auth, (req, res) => {
     return res.status(400).json({ error: 'Current password is incorrect' });
   if (new_password.length < 8)
     return res.status(400).json({ error: 'New password must be at least 8 characters' });
-
-  const hash = bcrypt.hashSync(new_password, 10);
-  db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(hash, req.user.id);
+  db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(bcrypt.hashSync(new_password, 10), req.user.id);
   res.json({ message: 'Password updated successfully' });
 });
 
 // ─── Ticket Routes ─────────────────────────────────────────────────────────
 
-// GET /api/tickets — account_manager sees all; director sees own
 app.get('/api/tickets', auth, (req, res) => {
   if (req.user.role === 'account_manager') {
     const { status, priority, branch, type, search } = req.query;
-    const conditions = [];
-    const params = [];
-
+    const conditions = [], params = [];
     if (status   && status   !== 'all') { conditions.push('t.status = ?');   params.push(status); }
     if (priority && priority !== 'all') { conditions.push('t.priority = ?'); params.push(priority); }
     if (branch   && branch   !== 'all') { conditions.push('t.branch = ?');   params.push(branch); }
@@ -91,32 +92,16 @@ app.get('/api/tickets', auth, (req, res) => {
       conditions.push('(t.title LIKE ? OR t.description LIKE ? OR t.ticket_number LIKE ?)');
       params.push(`%${search}%`, `%${search}%`, `%${search}%`);
     }
-
     const where = conditions.length ? 'WHERE ' + conditions.join(' AND ') : '';
-    const tickets = db.prepare(`
-      SELECT t.*, u.full_name AS creator_name
-      FROM tickets t
-      JOIN users u ON t.created_by = u.id
-      ${where}
-      ORDER BY ${PRIORITY_ORDER}, t.created_at DESC
-    `).all(...params);
-
-    return res.json(tickets.map(parseTicket));
+    return res.json(
+      db.prepare(`SELECT t.*, u.full_name AS creator_name FROM tickets t JOIN users u ON t.created_by = u.id ${where} ORDER BY ${PRIORITY_ORDER}, t.created_at DESC`).all(...params).map(parseTicket)
+    );
   }
-
-  // Director: own tickets only
-  const tickets = db.prepare(`
-    SELECT t.*, u.full_name AS creator_name
-    FROM tickets t
-    JOIN users u ON t.created_by = u.id
-    WHERE t.created_by = ?
-    ORDER BY ${PRIORITY_ORDER}, t.created_at DESC
-  `).all(req.user.id);
-
-  res.json(tickets.map(parseTicket));
+  res.json(
+    db.prepare(`SELECT t.*, u.full_name AS creator_name FROM tickets t JOIN users u ON t.created_by = u.id WHERE t.created_by = ? ORDER BY ${PRIORITY_ORDER}, t.created_at DESC`).all(req.user.id).map(parseTicket)
+  );
 });
 
-// POST /api/tickets — directors only
 app.post('/api/tickets', auth, (req, res) => {
   if (req.user.role !== 'director')
     return res.status(403).json({ error: 'Only directors can raise tickets' });
@@ -130,76 +115,67 @@ app.post('/api/tickets', auth, (req, res) => {
   const ticketNumber = `${code}-${String(cnt + 1).padStart(3, '0')}`;
 
   const id = uuidv4();
-  db.prepare(`
-    INSERT INTO tickets (id, ticket_number, title, type, priority, description, created_by, branch, metadata)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(id, ticketNumber, title, type, priority, description || '', req.user.id, req.user.branch, JSON.stringify(metadata || {}));
+  db.prepare('INSERT INTO tickets (id, ticket_number, title, type, priority, description, created_by, branch, metadata) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)').run(
+    id, ticketNumber, title, type, priority, description || '', req.user.id, req.user.branch, JSON.stringify(metadata || {})
+  );
 
-  const ticket = db.prepare(`
-    SELECT t.*, u.full_name AS creator_name FROM tickets t
-    JOIN users u ON t.created_by = u.id WHERE t.id = ?
-  `).get(id);
+  // Notify all managers
+  getManagerIds().forEach(mid =>
+    notify(mid, `New ${priority} ticket from ${req.user.branch}`, `${ticketNumber}: ${title}`, id)
+  );
 
+  const ticket = db.prepare('SELECT t.*, u.full_name AS creator_name FROM tickets t JOIN users u ON t.created_by = u.id WHERE t.id = ?').get(id);
   res.status(201).json(parseTicket(ticket));
 });
 
-// GET /api/tickets/:id
 app.get('/api/tickets/:id', auth, (req, res) => {
-  const ticket = db.prepare(`
-    SELECT t.*, u.full_name AS creator_name, u.branch AS creator_branch
-    FROM tickets t JOIN users u ON t.created_by = u.id
-    WHERE t.id = ?
-  `).get(req.params.id);
-
+  const ticket = db.prepare('SELECT t.*, u.full_name AS creator_name, u.branch AS creator_branch, u.id AS creator_id FROM tickets t JOIN users u ON t.created_by = u.id WHERE t.id = ?').get(req.params.id);
   if (!ticket) return res.status(404).json({ error: 'Ticket not found' });
   if (req.user.role === 'director' && ticket.created_by !== req.user.id)
     return res.status(403).json({ error: 'Access denied' });
 
-  const comments = db.prepare(`
-    SELECT c.*, u.full_name, u.role
-    FROM comments c JOIN users u ON c.user_id = u.id
-    WHERE c.ticket_id = ?
-    ORDER BY c.created_at ASC
-  `).all(req.params.id);
-
+  const comments = db.prepare('SELECT c.*, u.full_name, u.role FROM comments c JOIN users u ON c.user_id = u.id WHERE c.ticket_id = ? ORDER BY c.created_at ASC').all(req.params.id);
   res.json({ ...parseTicket(ticket), comments });
 });
 
-// PATCH /api/tickets/:id — update status/priority
 app.patch('/api/tickets/:id', auth, (req, res) => {
   const ticket = db.prepare('SELECT * FROM tickets WHERE id = ?').get(req.params.id);
   if (!ticket) return res.status(404).json({ error: 'Ticket not found' });
   if (req.user.role === 'director' && ticket.created_by !== req.user.id)
     return res.status(403).json({ error: 'Access denied' });
 
+  // Directors can only update status (withdraw = close) and description
+  // Managers can update status and title/description (priority removed)
   const allowed = req.user.role === 'account_manager'
-    ? ['status', 'priority', 'title', 'description']
-    : ['description'];
+    ? ['status', 'title', 'description']
+    : ['status', 'description'];
 
-  const updates = [];
-  const params = [];
-
+  const updates = [], params = [];
   allowed.forEach(field => {
-    if (req.body[field] !== undefined) {
-      updates.push(`${field} = ?`);
-      params.push(req.body[field]);
-    }
+    if (req.body[field] !== undefined) { updates.push(`${field} = ?`); params.push(req.body[field]); }
   });
 
   if (!updates.length) return res.status(400).json({ error: 'Nothing to update' });
-
   updates.push("updated_at = datetime('now')");
   db.prepare(`UPDATE tickets SET ${updates.join(', ')} WHERE id = ?`).run(...params, req.params.id);
 
-  const updated = db.prepare(`
-    SELECT t.*, u.full_name AS creator_name FROM tickets t
-    JOIN users u ON t.created_by = u.id WHERE t.id = ?
-  `).get(req.params.id);
+  // Notify on status change
+  if (req.body.status) {
+    if (req.user.role === 'account_manager') {
+      // Notify the director
+      notify(ticket.created_by, `Your ticket status was updated`, `${ticket.ticket_number} → ${req.body.status.replace('_', ' ')}`, req.params.id);
+    } else {
+      // Director withdrew — notify managers
+      getManagerIds().forEach(mid =>
+        notify(mid, `Ticket withdrawn by ${req.user.branch}`, `${ticket.ticket_number}: ${ticket.title}`, req.params.id)
+      );
+    }
+  }
 
+  const updated = db.prepare('SELECT t.*, u.full_name AS creator_name FROM tickets t JOIN users u ON t.created_by = u.id WHERE t.id = ?').get(req.params.id);
   res.json(parseTicket(updated));
 });
 
-// POST /api/tickets/:id/comments
 app.post('/api/tickets/:id/comments', auth, (req, res) => {
   const ticket = db.prepare('SELECT * FROM tickets WHERE id = ?').get(req.params.id);
   if (!ticket) return res.status(404).json({ error: 'Ticket not found' });
@@ -210,71 +186,78 @@ app.post('/api/tickets/:id/comments', auth, (req, res) => {
   if (!content?.trim()) return res.status(400).json({ error: 'Comment cannot be empty' });
 
   const id = uuidv4();
-  db.prepare('INSERT INTO comments (id, ticket_id, user_id, content) VALUES (?, ?, ?, ?)').run(
-    id, req.params.id, req.user.id, content.trim()
-  );
+  db.prepare('INSERT INTO comments (id, ticket_id, user_id, content) VALUES (?, ?, ?, ?)').run(id, req.params.id, req.user.id, content.trim());
   db.prepare("UPDATE tickets SET updated_at = datetime('now') WHERE id = ?").run(req.params.id);
 
-  const comment = db.prepare(`
-    SELECT c.*, u.full_name, u.role FROM comments c
-    JOIN users u ON c.user_id = u.id WHERE c.id = ?
-  `).get(id);
+  // Cross-notify: manager comments → director; director comments → managers
+  if (req.user.role === 'account_manager') {
+    notify(ticket.created_by, `Shady replied on ${ticket.ticket_number}`, content.trim().slice(0, 80), req.params.id);
+  } else {
+    getManagerIds().forEach(mid =>
+      notify(mid, `New note on ${ticket.ticket_number}`, `${req.user.full_name}: ${content.trim().slice(0, 60)}`, req.params.id)
+    );
+  }
 
+  const comment = db.prepare('SELECT c.*, u.full_name, u.role FROM comments c JOIN users u ON c.user_id = u.id WHERE c.id = ?').get(id);
   res.status(201).json(comment);
+});
+
+// ─── Notification Routes ───────────────────────────────────────────────────
+
+app.get('/api/notifications', auth, (req, res) => {
+  const notifications = db.prepare(
+    'SELECT * FROM notifications WHERE user_id = ? ORDER BY created_at DESC LIMIT 50'
+  ).all(req.user.id);
+  res.json(notifications);
+});
+
+app.patch('/api/notifications/read-all', auth, (req, res) => {
+  db.prepare('UPDATE notifications SET is_read = 1 WHERE user_id = ?').run(req.user.id);
+  res.json({ ok: true });
+});
+
+app.delete('/api/notifications', auth, (req, res) => {
+  db.prepare('DELETE FROM notifications WHERE user_id = ?').run(req.user.id);
+  res.json({ ok: true });
 });
 
 // ─── Stats Routes ──────────────────────────────────────────────────────────
 
 app.get('/api/stats', auth, (req, res) => {
   if (req.user.role === 'director') {
-    const stats = db.prepare(`
-      SELECT
-        COUNT(*) AS total,
+    return res.json(db.prepare(`
+      SELECT COUNT(*) AS total,
         SUM(CASE WHEN status = 'open' THEN 1 ELSE 0 END) AS open,
         SUM(CASE WHEN status = 'in_progress' THEN 1 ELSE 0 END) AS in_progress,
-        SUM(CASE WHEN status = 'resolved' OR status = 'closed' THEN 1 ELSE 0 END) AS resolved,
+        SUM(CASE WHEN status IN ('resolved','closed') THEN 1 ELSE 0 END) AS resolved,
         SUM(CASE WHEN priority = 'urgent' AND status NOT IN ('resolved','closed') THEN 1 ELSE 0 END) AS urgent
       FROM tickets WHERE created_by = ?
-    `).get(req.user.id);
-    return res.json(stats);
+    `).get(req.user.id));
   }
-
   const overall = db.prepare(`
-    SELECT
-      COUNT(*) AS total,
+    SELECT COUNT(*) AS total,
       SUM(CASE WHEN status = 'open' THEN 1 ELSE 0 END) AS open,
       SUM(CASE WHEN status = 'in_progress' THEN 1 ELSE 0 END) AS in_progress,
-      SUM(CASE WHEN status = 'resolved' OR status = 'closed' THEN 1 ELSE 0 END) AS resolved,
+      SUM(CASE WHEN status IN ('resolved','closed') THEN 1 ELSE 0 END) AS resolved,
       SUM(CASE WHEN priority = 'urgent' AND status NOT IN ('resolved','closed') THEN 1 ELSE 0 END) AS urgent,
       SUM(CASE WHEN status NOT IN ('resolved','closed') AND date(created_at) = date('now') THEN 1 ELSE 0 END) AS today
     FROM tickets
   `).get();
-
   const branches = db.prepare(`
-    SELECT branch,
-      COUNT(*) AS total,
+    SELECT branch, COUNT(*) AS total,
       SUM(CASE WHEN status NOT IN ('resolved','closed') THEN 1 ELSE 0 END) AS active,
       SUM(CASE WHEN priority = 'urgent' AND status NOT IN ('resolved','closed') THEN 1 ELSE 0 END) AS urgent
     FROM tickets GROUP BY branch ORDER BY branch
   `).all();
-
   res.json({ ...overall, branches });
 });
 
-// ─── User Routes ───────────────────────────────────────────────────────────
-
 app.get('/api/users', auth, (req, res) => {
-  if (req.user.role !== 'account_manager')
-    return res.status(403).json({ error: 'Access denied' });
-  const users = db.prepare(
-    'SELECT id, username, full_name, role, branch FROM users ORDER BY role, branch'
-  ).all();
-  res.json(users);
+  if (req.user.role !== 'account_manager') return res.status(403).json({ error: 'Access denied' });
+  res.json(db.prepare('SELECT id, username, full_name, role, branch FROM users ORDER BY role, branch').all());
 });
 
-// ─── Start Server ──────────────────────────────────────────────────────────
+// ─── Start ─────────────────────────────────────────────────────────────────
 
 const PORT = process.env.PORT || 3001;
-app.listen(PORT, () => {
-  console.log(`\n🌟 Little Scribblers CRM — Backend running on http://localhost:${PORT}\n`);
-});
+app.listen(PORT, () => console.log(`\n Little Scribblers CRM — http://localhost:${PORT}\n`));

@@ -1,5 +1,6 @@
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import NotificationBell from './NotificationBell';
 
 export default function Navbar() {
   const { user, logout } = useAuth();
@@ -66,6 +67,9 @@ export default function Navbar() {
         }}>
           {user?.full_name?.[0]?.toUpperCase()}
         </div>
+
+        {/* Notification Bell */}
+        <NotificationBell />
 
         {/* Divider */}
         <div style={{ width: 1, height: 28, background: 'var(--border)' }} />

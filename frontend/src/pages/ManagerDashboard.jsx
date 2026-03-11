@@ -1,7 +1,18 @@
 import { useState, useEffect, useCallback } from 'react';
 import { api } from '../api';
 import TicketCard from '../components/TicketCard';
+import CustomSelect from '../components/CustomSelect';
 import { TICKET_TYPES, PRIORITIES } from '../constants';
+
+const STATUS_OPTIONS = [
+  { value: 'active',       label: 'Active tickets' },
+  { value: 'open',         label: 'Open' },
+  { value: 'in_progress',  label: 'In Progress' },
+  { value: 'pending_info', label: 'Pending Info' },
+  { value: 'resolved',     label: 'Resolved' },
+  { value: 'closed',       label: 'Closed' },
+  { value: 'all',          label: 'All statuses' },
+];
 
 const StatBox = ({ label, value, color, sublabel }) => (
   <div style={{
@@ -175,25 +186,32 @@ export default function ManagerDashboard() {
           />
         </div>
 
-        <select className="custom-select" value={filters.status} onChange={e => setFilter('status', e.target.value)}>
-          <option value="active">Active tickets</option>
-          <option value="open">Open</option>
-          <option value="in_progress">In Progress</option>
-          <option value="pending_info">Pending Info</option>
-          <option value="resolved">Resolved</option>
-          <option value="closed">Closed</option>
-          <option value="all">All statuses</option>
-        </select>
+        <CustomSelect
+          value={filters.status}
+          onChange={v => setFilter('status', v)}
+          options={STATUS_OPTIONS}
+          minWidth={152}
+        />
 
-        <select className="custom-select" value={filters.priority} onChange={e => setFilter('priority', e.target.value)}>
-          <option value="all">All priorities</option>
-          {PRIORITIES.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
-        </select>
+        <CustomSelect
+          value={filters.priority}
+          onChange={v => setFilter('priority', v)}
+          options={[
+            { value: 'all', label: 'All priorities' },
+            ...PRIORITIES.map(p => ({ value: p.value, label: p.label, dot: p.color })),
+          ]}
+          minWidth={148}
+        />
 
-        <select className="custom-select" value={filters.type} onChange={e => setFilter('type', e.target.value)}>
-          <option value="all">All types</option>
-          {TICKET_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
-        </select>
+        <CustomSelect
+          value={filters.type}
+          onChange={v => setFilter('type', v)}
+          options={[
+            { value: 'all', label: 'All types' },
+            ...TICKET_TYPES.map(t => ({ value: t.value, label: t.label })),
+          ]}
+          minWidth={148}
+        />
 
         {hasFilters && (
           <button

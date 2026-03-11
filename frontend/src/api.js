@@ -50,4 +50,14 @@ export const api = {
   // Users
   getUsers: () =>
     fetch(`${BASE}/users`, { headers: headers() }).then(handle),
+
+  // Notifications
+  getNotifications: () =>
+    fetch(`${BASE}/notifications`, { headers: headers() }).then(handle),
+
+  markAllRead: () =>
+    fetch(`${BASE}/notifications/read-all`, { method: 'PATCH', headers: headers() }).then(handle),
+
+  clearNotifications: () =>
+    fetch(`${BASE}/notifications`, { method: 'DELETE', headers: headers() }).then(handle),
 };
