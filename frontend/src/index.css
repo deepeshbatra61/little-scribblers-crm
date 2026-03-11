@@ -1,0 +1,93 @@
+/* ─── Design Tokens ─────────────────────────────────────────────────────── */
+:root {
+  /* Palette — soft, warm, childcare-friendly */
+  --bg:           #F7F5FF;
+  --bg-alt:       #EEF0FF;
+  --surface:      #FFFFFF;
+  --surface-hover:#F3F0FF;
+  --border:       #E4E0F5;
+  --border-focus: #9B8FD4;
+
+  --primary:      #7C6BAE;
+  --primary-light:#EAE6F8;
+  --primary-dark: #5E4F8A;
+
+  --text:         #2D2550;
+  --text-muted:   #8880AA;
+  --text-light:   #B8B4CC;
+
+  /* Priority colours */
+  --urgent:       #FF6B6B;
+  --urgent-bg:    #FFF0F0;
+  --urgent-border:#FFCECE;
+  --high:         #FF9F43;
+  --high-bg:      #FFF5EA;
+  --high-border:  #FFD9A8;
+  --medium:       #F9CA24;
+  --medium-bg:    #FFFBEB;
+  --medium-border:#FDEAA8;
+  --low:          #6AB04C;
+  --low-bg:       #F0FFF4;
+  --low-border:   #C8EDB8;
+
+  /* Status colours */
+  --status-open:    #74B9FF;
+  --status-progress:#A29BFE;
+  --status-pending: #FD79A8;
+  --status-resolved:#00B894;
+  --status-closed:  #B2BEC3;
+
+  /* Spacing & Shape */
+  --radius-xs: 4px;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 24px;
+
+  --shadow-sm: 0 1px 4px rgba(124,107,174,0.08);
+  --shadow-md: 0 4px 16px rgba(124,107,174,0.12);
+  --shadow-lg: 0 8px 32px rgba(124,107,174,0.18);
+}
+
+/* ─── Reset & Base ──────────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body, #root {
+  height: 100%;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  font-size: 14px;
+  color: var(--text);
+  background: var(--bg);
+  -webkit-font-smoothing: antialiased;
+}
+
+a { color: inherit; text-decoration: none; }
+button { cursor: pointer; font-family: inherit; }
+input, textarea, select { font-family: inherit; }
+ul { list-style: none; }
+
+/* ─── Scrollbar ─────────────────────────────────────────────────────────── */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 99px; }
+::-webkit-scrollbar-thumb:hover { background: var(--text-light); }
+
+/* ─── Utility ───────────────────────────────────────────────────────────── */
+.sr-only { position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0,0,0,0); }
+
+/* ─── Animations ────────────────────────────────────────────────────────── */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(20px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: .5; }
+}
+
+.animate-in { animation: fadeIn 0.25s ease forwards; }
+.animate-slide { animation: slideUp 0.3s ease forwards; }
